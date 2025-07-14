@@ -1,65 +1,24 @@
-const { spawn } = require("child_process");
-const axios = require("axios");
-const express = require("express");
-const path = require("path");
-const logger = require("./utils/log");
+const login = require("fca-unofficial");
+const fs = require("fs");
 
-////////////////////////////////////////
-//========= Uptime Dashboard =========//
-////////////////////////////////////////
+login({ appState: JSON.parse(fs.readFileSync("fbstate.json", "utf-8")) }, (err, api) => {
+  if (err) {
+    console.error("❌ Login Failed:", err);
+    return;
+  }
 
-const app = express();
-const port = process.env.PORT || 8080;
+  console.log("✅ Logged in as:", api.getCurrentUserID());
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.listen(port, () => {
-  logger("Dashboard server started successfully!", "[ UPTIME ]");
-});
-
-//////////////////////////////////////////////////////
-//========= Launch and Auto-Restart Bot ============//
-//////////////////////////////////////////////////////
-
-let restartCount = 0;
-
-function startBot(message) {
-  if (message) logger(message, "[ BOT ]");
-
-  const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "Priyansh.js"], {
-    cwd: __dirname,
-    stdio: "inherit",
-    shell: true
+  api.setOptions({
+    listenEvents: true
   });
 
-  child.on("close", (code) => {
-    if (code !== 0 && restartCount < 5) {
-      restartCount++;
-      logger(`Bot crashed. Restarting... (attempt ${restartCount})`, "[ RESTART ]");
-      startBot();
-    } else if (restartCount >= 5) {
-      logger("Too many restart attempts. Exiting.", "[ ERROR ]");
-      process.exit(1);
+  api.listenMqtt((err, event) => {
+    if (err) return console.error("❌ Listen Error:", err);
+
+    if (event.type === "message" && event.body) {
+      console.log("📩 Message Received:", event.body);
+      api.sendMessage("😂 Bot Online Hai Bhai!", event.threadID);
     }
   });
-
-  child.on("error", (err) => {
-    logger(`Failed to start bot: ${err.message}`, "[ ERROR ]");
-  });
-}
-
-///////////////////////////////////////
-//========= GitHub Update Check =====//
-///////////////////////////////////////
-
-axios.get("https://raw.githubusercontent.com/priyanshu192/bot/main/package.json").then((res) => {
-  logger(res.data.name, "[ NAME ]");
-  logger(`Version: ${res.data.version}`, "[ VERSION ]");
-  logger(res.data.description, "[ DESCRIPTION ]");
-}).catch(() => {
-  logger("Failed to fetch update info.", "[ UPDATE CHECK ]");
 });
-
-startBot();
