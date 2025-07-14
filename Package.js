@@ -1,24 +1,20 @@
-const login = require("fca-unofficial");
-const fs = require("fs");
-
-login({ appState: JSON.parse(fs.readFileSync("fbstate.json", "utf-8")) }, (err, api) => {
-  if (err) {
-    console.error("❌ Login Failed:", err);
-    return;
+{
+  "name": "simple-bot",
+  "version": "1.0.0",
+  "description": "Messenger bot with cookie login and auto-reply",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "messenger",
+    "bot",
+    "fca-unofficial"
+  ],
+  "author": "Kashif",
+  "license": "MIT",
+  "dependencies": {
+    "fca-unofficial": "^1.0.0",
+    "fs-extra": "^11.2.0"
   }
-
-  console.log("✅ Logged in as:", api.getCurrentUserID());
-
-  api.setOptions({
-    listenEvents: true
-  });
-
-  api.listenMqtt((err, event) => {
-    if (err) return console.error("❌ Listen Error:", err);
-
-    if (event.type === "message" && event.body) {
-      console.log("📩 Message Received:", event.body);
-      api.sendMessage("😂 Bot Online Hai Bhai!", event.threadID);
-    }
-  });
-});
+}
