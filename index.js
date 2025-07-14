@@ -1,40 +1,65 @@
-const login = require("fca-unofficial");
-const fs = require("fs");
-const config = require("./config.json");
+const { spawn } = require("child_process");
+const axios = require("axios");
+const express = require("express");
+const path = require("path");
+const logger = require("./utils/log");
 
-let appState;
-try {
-  appState = JSON.parse(fs.readFileSync("fbstate.json", "utf-8"));
-} catch (e) {
-  console.error("❌ fbstate.json not found or invalid.");
-  process.exit(1);
+////////////////////////////////////////
+//========= Uptime Dashboard =========//
+////////////////////////////////////////
+
+const app = express();
+const port = process.env.PORT || 8080;
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.listen(port, () => {
+  logger("Dashboard server started successfully!", "[ UPTIME ]");
+});
+
+//////////////////////////////////////////////////////
+//========= Launch and Auto-Restart Bot ============//
+//////////////////////////////////////////////////////
+
+let restartCount = 0;
+
+function startBot(message) {
+  if (message) logger(message, "[ BOT ]");
+
+  const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "Priyansh.js"], {
+    cwd: __dirname,
+    stdio: "inherit",
+    shell: true
+  });
+
+  child.on("close", (code) => {
+    if (code !== 0 && restartCount < 5) {
+      restartCount++;
+      logger(`Bot crashed. Restarting... (attempt ${restartCount})`, "[ RESTART ]");
+      startBot();
+    } else if (restartCount >= 5) {
+      logger("Too many restart attempts. Exiting.", "[ ERROR ]");
+      process.exit(1);
+    }
+  });
+
+  child.on("error", (err) => {
+    logger(`Failed to start bot: ${err.message}`, "[ ERROR ]");
+  });
 }
 
-login({ appState }, (err, api) => {
-  if (err) {
-    console.error("❌ Login failed:", err.error || err);
-    return;
-  }
+///////////////////////////////////////
+//========= GitHub Update Check =====//
+///////////////////////////////////////
 
-  console.log("✅ Logged in as:", api.getCurrentUserID());
-  api.setOptions({ listenEvents: true });
-
-  const listen = require("./modules/command/goibot");
-
-  api.listen((err, event) => {
-    if (err) return console.error("❌ Listen error:", err);
-
-    // 🐞 Debug message
-    if (event.body) console.log(`📩 Message: ${event.body}`);
-
-    listen.handleEvent({
-      api,
-      event,
-      args: [],
-      Threads: {},
-      Users: {
-        getNameUser: async () => "User"
-      }
-    });
-  });
+axios.get("https://raw.githubusercontent.com/priyanshu192/bot/main/package.json").then((res) => {
+  logger(res.data.name, "[ NAME ]");
+  logger(`Version: ${res.data.version}`, "[ VERSION ]");
+  logger(res.data.description, "[ DESCRIPTION ]");
+}).catch(() => {
+  logger("Failed to fetch update info.", "[ UPDATE CHECK ]");
 });
+
+startBot();
